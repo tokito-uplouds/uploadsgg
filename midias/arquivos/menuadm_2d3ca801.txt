@@ -1,0 +1,17 @@
+case 'menuadm':
+case 'menuadms':
+case 'adm':
+await sendMenu(from, selo, {
+reaction: "🛡️",
+caption: linguagem.adms(
+NomeDoBot,
+pushname,
+isCargo,
+isChVip,
+hora,
+prefix
+),
+isAdminRequired: true,
+sendAudio: true
+});
+break;
