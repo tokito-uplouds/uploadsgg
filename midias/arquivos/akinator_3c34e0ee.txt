@@ -1,0 +1,382 @@
+case 'akinator':
+case 'aki': {
+try {
+if (!isGroup) return reply(mess.onlyGroup())
+
+await reagir(from, '🧞‍♂️')
+
+const axios = require('axios')
+const { generateWAMessageFromContent, proto, prepareWAMessageMedia } = require('@whiskeysockets/baileys')
+
+if (!global.akinatorJogos) global.akinatorJogos = {}
+if (!global.akinatorMensagens) global.akinatorMensagens = {}
+
+const canalInfoAki = typeof canalInfo === 'function' ? canalInfo([sender]) : undefined
+const jogoAtual = global.akinatorJogos[from]
+const idAki = jogoAtual?.id || `${from}_${sender}`
+
+const apagarMsgAki = async () => {
+try {
+const antiga = global.akinatorMensagens[from]
+if (!antiga) return
+
+await tokito.sendMessage(from, {
+delete: antiga
+}).catch(() => {})
+
+delete global.akinatorMensagens[from]
+} catch {}
+}
+
+if (jogoAtual && jogoAtual.sender !== sender) {
+return reply(`🧞‍♂️ *ᴀᴋɪɴᴀᴛᴏʀ*\n\n💭 ᴊᴀ ᴇxɪsᴛᴇ ᴜᴍ ᴊᴏɢᴏ ᴇᴍ ᴀɴᴅᴀᴍᴇɴᴛᴏ.\n\n👤 ᴊᴏɢᴀᴅᴏʀ: *${jogoAtual.nome || 'ᴀʟɢᴜᴇᴍ'}*`)
+}
+
+const normalizarAki = (txt = '') => {
+return String(txt || '')
+.toLowerCase()
+.normalize('NFD')
+.replace(/[\u0300-\u036f]/g, '')
+.replace(/\s+/g, ' ')
+.trim()
+}
+
+const criarQuick = (id, texto) => ({
+name: 'quick_reply',
+buttonParamsJson: JSON.stringify({
+display_text: texto,
+id: `${prefix + command} ${id}`
+})
+})
+
+const criarListaAcoes = () => ({
+name: 'single_select',
+buttonParamsJson: JSON.stringify({
+title: '🧞‍♂️ ᴍᴇɴᴜ ᴀᴋɪɴᴀᴛᴏʀ',
+sections: [{
+title: '🔮 ᴀᴄᴏᴇs',
+rows: [
+{
+title: '↩️ ᴠᴏʟᴛᴀʀ',
+description: 'ᴠᴏʟᴛᴀʀ ᴘᴀʀᴀ ᴀ ᴘᴇʀɢᴜɴᴛᴀ ᴀɴᴛᴇʀɪᴏʀ.',
+id: `${prefix + command} voltar`
+},
+{
+title: '❌ ᴄᴀɴᴄᴇʟᴀʀ',
+description: 'ᴇɴᴄᴇʀʀᴀʀ ᴇsᴛᴇ ᴊᴏɢᴏ.',
+id: `${prefix + command} cancelar`
+}
+]
+}]
+})
+})
+
+const botoesInicioAki = [
+criarQuick('iniciar', '🧞‍♂️ ᴊᴏɢᴀʀ'),
+criarQuick('cancelar', '❌ ᴄᴀɴᴄᴇʟᴀʀ')
+]
+
+const botoesRespostaAki = [
+criarQuick('sim', '✅ sɪᴍ'),
+criarQuick('nao', '❌ ɴᴀᴏ'),
+criarQuick('naosei', '🤔 ɴᴀᴏ sᴇɪ'),
+criarQuick('provavelmente', '✨ ᴘʀᴏᴠᴀᴠᴇʟᴍᴇɴᴛᴇ sɪᴍ'),
+criarQuick('provavelmentenao', '🌙 ᴘʀᴏᴠᴀᴠᴇʟᴍᴇɴᴛᴇ ɴᴀᴏ'),
+criarListaAcoes()
+]
+
+const botoesResultadoAki = [
+criarQuick('acertei', '🎯 ᴀᴄᴇʀᴛᴇɪ'),
+criarQuick('errou', '😅 ᴇʀʀᴏᴜ'),
+criarQuick('iniciar', '🔄 ᴊᴏɢᴀʀ ᴅᴇ ɴᴏᴠᴏ')
+]
+
+const enviarInterativoAki = async ({ texto, imagem = null, botoes = [], apagarAntiga = true }) => {
+if (apagarAntiga) await apagarMsgAki()
+
+let header = {}
+
+if (imagem) {
+const media = await prepareWAMessageMedia(
+{ image: { url: imagem } },
+{ upload: tokito.waUploadToServer }
+)
+
+header = proto.Message.InteractiveMessage.Header.create({
+hasMediaAttachment: true,
+imageMessage: media.imageMessage
+})
+}
+
+const msg = generateWAMessageFromContent(from, {
+viewOnceMessage: {
+message: {
+interactiveMessage: proto.Message.InteractiveMessage.create({
+body: proto.Message.InteractiveMessage.Body.create({ text: texto }),
+footer: proto.Message.InteractiveMessage.Footer.create({ text: NomeDoBot }),
+...(imagem ? { header } : {}),
+nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+buttons: botoes
+}),
+...(canalInfoAki ? { contextInfo: canalInfoAki } : {})
+})
+}
+}
+}, { quoted: info })
+
+await tokito.relayMessage(from, msg.message, { messageId: msg.key.id })
+
+global.akinatorMensagens[from] = {
+remoteJid: from,
+fromMe: true,
+id: msg.key.id
+}
+
+return msg
+}
+
+const pegarResultadoAki = (r = {}) => {
+const fontes = [
+r,
+r.resultado,
+r.result,
+r.acerto,
+r.guess,
+r.win,
+r.personagem,
+r.data,
+Array.isArray(r.guesses) ? r.guesses[0] : null,
+Array.isArray(r.answers) ? r.answers[0] : null
+].filter(Boolean)
+
+for (const item of fontes) {
+const nome = item.personagem || item.nome || item.name || item.character || item.proposition || item.name_proposition || item.sugestion_name || item.suggestion_name || ''
+const desc = item.descricao || item.description || item.desc || item.pseudo || item.title || item.titulo || item.description_proposition || item.prop_desc || item.sugestion_desc || item.suggestion_desc || ''
+const foto = item.imagem || item.foto || item.image || item.photo || item.picture || item.avatar || item.absolute_picture_path || item.photo_path || item.sugestion_photo || item.suggestion_photo || ''
+
+if (nome || desc || foto) return { nome, desc, foto }
+}
+
+return { nome: '', desc: '', foto: '' }
+}
+
+const enviarPerguntaAki = async (r = {}, titulo = 'ᴀᴋɪɴᴀᴛᴏʀ') => {
+const perguntaAki = r.pergunta || r.question || 'ʀᴇsᴘᴏɴᴅᴀ ᴀ ᴘᴇʀɢᴜɴᴛᴀ'
+const etapaAki = r.etapa || r.step || 1
+const progressoAki = Number(r.progresso || r.progress || r.progression || 0).toFixed(1)
+
+const img = `${API_URL}/canvas/akinator?modo=pergunta&etapa=${encodeURIComponent(etapaAki)}&pergunta=${encodeURIComponent(perguntaAki)}&progresso=${encodeURIComponent(progressoAki)}&apikey=${API_KEY_TOKITO}`
+
+let msg = `🧞‍♂️ *${titulo}*\n\n`
+msg += `❓ ᴘᴇʀɢᴜɴᴛᴀ *${etapaAki}*\n\n`
+msg += `💭 ${perguntaAki}\n\n`
+msg += `📊 ᴘʀᴏɢʀᴇssᴀᴏ: *${progressoAki}%*\n\n`
+msg += `ᴇsᴄᴏʟʜᴀ ᴜᴍᴀ ʀᴇsᴘᴏsᴛᴀ ᴀʙᴀɪxᴏ.`
+
+return enviarInterativoAki({
+texto: msg,
+imagem: img,
+botoes: botoesRespostaAki
+})
+}
+
+if (!q || !q.trim()) {
+const img = `${API_URL}/canvas/akinator?modo=inicio&apikey=${API_KEY_TOKITO}`
+
+let msg = `🧞‍♂️ *ᴀᴋɪɴᴀᴛᴏʀ*\n\n`
+msg += `- *💭 | ᴘᴇɴsᴇ ᴇᴍ ᴜᴍ ᴘᴇʀsᴏɴᴀɢᴇᴍ*\n`
+msg += `- *🎭 | ᴘᴏᴅᴇ sᴇʀ ʀᴇᴀʟ ᴏᴜ ғɪᴄᴛɪᴄɪᴏ*\n\n`
+msg += `> ᴄʟɪǫᴜᴇ ɴᴏ ʙᴏᴛᴀᴏ ᴀʙᴀɪxᴏ ᴘᴀʀᴀ ᴄᴏᴍᴇᴄᴀʀ.`
+
+return enviarInterativoAki({
+texto: msg,
+imagem: img,
+botoes: botoesInicioAki
+})
+}
+
+const arg = normalizarAki(q)
+
+if (['acertei', 'acertou', 'sim acertou'].includes(arg)) {
+let msg = `🧞‍♂️ *ɪɴᴄʀɪᴠᴇʟ!*\n\n`
+msg += `😎 ᴇᴜ sᴀʙɪᴀ!\n\n`
+msg += `✨ ғᴏɪ ᴜᴍ ᴏᴛɪᴍᴏ ᴅᴇsᴀғɪᴏ.\n\n`
+msg += `ᴠᴀᴍᴏs ᴊᴏɢᴀʀ ɴᴏᴠᴀᴍᴇɴᴛᴇ?`
+
+await enviarInterativoAki({
+texto: msg,
+botoes: botoesInicioAki
+})
+
+delete global.akinatorJogos[from]
+return
+}
+
+if (['errou', 'nao acertou', 'não acertou', 'naoacertou'].includes(arg)) {
+let msg = `🧞‍♂️ *ᴀʜʜ...*\n\n`
+msg += `😅 ᴅᴇssᴀ ᴠᴇᴢ ᴠᴏᴄᴇ ᴍᴇ ᴠᴇɴᴄᴇᴜ.\n\n`
+msg += `🔮 ɴᴀ ᴘʀᴏxɪᴍᴀ ᴇᴜ ᴠᴏᴜ ᴀᴄᴇʀᴛᴀʀ.\n\n`
+msg += `✨ ᴠᴀᴍᴏs ᴛᴇɴᴛᴀʀ ɴᴏᴠᴀᴍᴇɴᴛᴇ?`
+
+await enviarInterativoAki({
+texto: msg,
+botoes: botoesInicioAki
+})
+
+delete global.akinatorJogos[from]
+return
+}
+
+if (['iniciar', 'start', 'jogar'].includes(arg)) {
+global.akinatorJogos[from] = {
+sender,
+id: idAki,
+nome: pushname,
+inicio: Date.now()
+}
+
+const { data } = await axios.get(`${API_URL}/api/akinator/start`, {
+params: {
+id: idAki,
+apikey: API_KEY_TOKITO
+},
+timeout: 30000
+})
+
+if (!data?.status) {
+delete global.akinatorJogos[from]
+return reply(`🧞‍♂️ *ᴀᴋɪɴᴀᴛᴏʀ*\n\n😅 ɴᴀᴏ ᴄᴏɴsᴇɢᴜɪ ɪɴɪᴄɪᴀʀ ᴏ ᴊᴏɢᴏ.\n\n${data?.resultado || data?.erro || ''}`)
+}
+
+const r = data.resultado || data.result || {}
+return enviarPerguntaAki(r, 'ᴀᴋɪɴᴀᴛᴏʀ')
+}
+
+if (!jogoAtual) {
+let msg = `🧞‍♂️ *ᴀᴋɪɴᴀᴛᴏʀ*\n\n`
+msg += `💭 ɴᴇɴʜᴜᴍ ᴊᴏɢᴏ ᴇᴍ ᴀɴᴅᴀᴍᴇɴᴛᴏ.\n\n`
+msg += `✨ ᴛᴏǫᴜᴇ ᴇᴍ *ᴊᴏɢᴀʀ* ᴘᴀʀᴀ ᴄᴏᴍᴇᴄᴀʀ.`
+
+return enviarInterativoAki({
+texto: msg,
+botoes: botoesInicioAki
+})
+}
+
+if (['cancelar', 'sair', 'parar', 'end'].includes(arg)) {
+try {
+await axios.get(`${API_URL}/api/akinator/end`, {
+params: {
+id: idAki,
+apikey: API_KEY_TOKITO
+},
+timeout: 30000
+})
+} catch {}
+
+delete global.akinatorJogos[from]
+
+let msg = `🧞‍♂️ *ᴀᴋɪɴᴀᴛᴏʀ*\n\n`
+msg += `✨ ᴏ ᴊᴏɢᴏ ғᴏɪ ᴇɴᴄᴇʀʀᴀᴅᴏ.\n\n`
+msg += `🔮 ǫᴜᴀɴᴅᴏ ǫᴜɪsᴇʀ, ᴘᴏᴅᴇᴍᴏs ᴛᴇɴᴛᴀʀ ᴅᴇ ɴᴏᴠᴏ.`
+
+return enviarInterativoAki({
+texto: msg,
+botoes: botoesInicioAki
+})
+}
+
+if (['voltar', 'back'].includes(arg)) {
+const { data } = await axios.get(`${API_URL}/api/akinator/back`, {
+params: {
+id: idAki,
+apikey: API_KEY_TOKITO
+},
+timeout: 30000
+})
+
+if (!data?.status) {
+return reply(`🧞‍♂️ *ᴀᴋɪɴᴀᴛᴏʀ*\n\n😅 ɴᴀᴏ ᴄᴏɴsᴇɢᴜɪ ᴠᴏʟᴛᴀʀ.\n\n${data?.resultado || data?.erro || ''}`)
+}
+
+const r = data.resultado || data.result || {}
+return enviarPerguntaAki(r, 'ᴀᴋɪɴᴀᴛᴏʀ')
+}
+
+const mapaRespostasAki = {
+sim: 'sim',
+s: 'sim',
+nao: 'nao',
+n: 'nao',
+não: 'nao',
+naosei: 'naosei',
+'nao sei': 'naosei',
+'não sei': 'naosei',
+provavelmente: 'provavelmente',
+'provavelmente sim': 'provavelmente',
+provavelmentesim: 'provavelmente',
+provavelmentenao: 'provavelmentenao',
+'provavelmente nao': 'provavelmentenao',
+'provavelmente não': 'provavelmentenao',
+'prov nao': 'provavelmentenao',
+'prov não': 'provavelmentenao',
+'prov. nao': 'provavelmentenao',
+'prov. não': 'provavelmentenao'
+}
+
+const respostaAki = mapaRespostasAki[arg]
+
+if (!respostaAki) {
+return enviarInterativoAki({
+texto: `🧞‍♂️ *ᴀᴋɪɴᴀᴛᴏʀ*\n\n🤔 ᴇsᴄᴏʟʜᴀ ᴜᴍᴀ ʀᴇsᴘᴏsᴛᴀ ᴀʙᴀɪxᴏ.`,
+botoes: botoesRespostaAki
+})
+}
+
+const { data } = await axios.get(`${API_URL}/api/akinator/answer`, {
+params: {
+id: idAki,
+resposta: respostaAki,
+apikey: API_KEY_TOKITO
+},
+timeout: 30000
+})
+
+if (!data?.status) {
+return reply(`🧞‍♂️ *ᴀᴋɪɴᴀᴛᴏʀ*\n\n😅 ᴅᴇᴜ ᴜᴍ ᴘʀᴏʙʟᴇᴍᴀ.\n\n${data?.resultado || data?.erro || ''}`)
+}
+
+const r = data.resultado || data.result || {}
+
+if (r.finalizado) {
+delete global.akinatorJogos[from]
+
+const acerto = pegarResultadoAki(r)
+const nomeFinal = acerto.nome || 'ᴘᴇʀsᴏɴᴀɢᴇᴍ'
+const descFinal = acerto.desc || 'ᴅᴇsᴄʀɪᴄᴀᴏ ɴᴀᴏ ᴅɪsᴘᴏɴɪᴠᴇʟ'
+const fotoFinal = acerto.foto || ''
+const progresso = Number(r.progresso || r.progress || r.progression || 0).toFixed(1)
+
+const img = `${API_URL}/canvas/akinator?modo=resultado&personagem=${encodeURIComponent(nomeFinal)}&descricao=${encodeURIComponent(descFinal)}&foto=${encodeURIComponent(fotoFinal)}&progresso=${encodeURIComponent(progresso)}&apikey=${API_KEY_TOKITO}`
+
+let msgFinal = `🧞‍♂️ *ᴇᴜ ᴀᴄʜᴏ ǫᴜᴇ ᴇɴᴄᴏɴᴛʀᴇɪ!*\n\n`
+msgFinal += `🎭 *${nomeFinal}*\n\n`
+msgFinal += `📖 ${descFinal}\n\n`
+msgFinal += `📊 ᴄᴏɴғɪᴀɴᴄᴀ: *${progresso}%*\n\n`
+msgFinal += `🤔 ᴀᴄᴇʀᴛᴇɪ?`
+
+return enviarInterativoAki({
+texto: msgFinal,
+imagem: img,
+botoes: botoesResultadoAki
+})
+}
+
+return enviarPerguntaAki(r, 'ᴀᴋɪɴᴀᴛᴏʀ')
+
+} catch (e) {
+console.log('[ᴀᴋɪɴᴀᴛᴏʀ ᴇʀʀᴏ]', e?.response?.data || e)
+reply(`🧞‍♂️ *ᴀᴋɪɴᴀᴛᴏʀ*\n\n😅 ᴅᴇᴜ ᴇʀʀᴏ: ${e.message}`)
+}
+}
+break
